@@ -1,0 +1,1469 @@
+---
+title: "Supplementary Code for Practicum Report (Understanding The Interactions of Genetic Risk forAlzheimer’s Disease and Glaucoma in CognitiveDecline With Machine Learning)"
+author: "Amin Kharaghani"
+date: "21/09/2020"
+output: pdf_document
+geometry: margin=2cm
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Quality Control of the genotype data in Terminal:
+
+```{bash eval=FALSE, include=TRUE}
+module load PLINK/1.9
+
+plink \
+--bfile /external/rprshnas01/netdata_kcni/dflab/data/rosmap/genotype/TOPmed_imputed/vcf
+/merged/merged_final_rs \
+--missing \
+--out ./PLINK_QC/missing
+
+plink \
+--bfile /external/rprshnas01/netdata_kcni/dflab/data/rosmap/genotype/TOPmed_imputed/vcf
+/merged/merged_final_rs \
+--geno 0.2 \
+--make-bed \
+--out ./PLINK_QC/rosmap1
+
+plink \
+--bfile ./PLINK_QC/rosmap1 \
+--mind 0.2 \
+--make-bed \
+--out ./PLINK_QC/rosmap2
+
+plink \
+--bfile ./PLINK_QC/rosmap2 \
+--geno 0.02 \
+--make-bed \
+--out ./PLINK_QC/rosmap3
+
+plink \
+--bfile ./PLINK_QC/rosmap3 \
+--mind 0.02 \
+--make-bed \
+--out ./PLINK_QC/rosmap4
+
+awk '{ if ($1 >= 1 && $1 <= 22) print $2 }' ./PLINK_QC/rosmap4.bim > ./PLINK_QC/snp_1_22.txt
+
+plink \
+--bfile ./PLINK_QC/rosmap4 \
+--extract ./PLINK_QC/snp_1_22.txt \
+--make-bed \
+--out ./PLINK_QC/rosmap6
+
+plink \
+--bfile ./PLINK_QC/rosmap6 \
+--freq \
+--out ./PLINK_QC/MAF_check
+
+plink \
+--bfile ./PLINK_QC/rosmap6 \
+--maf 0.05 \
+--make-bed \
+--out ./PLINK_QC/rosmap7
+
+plink \
+--bfile ./PLINK_QC/rosmap7 \
+--hardy \
+--out ./PLINK_QC/hardy
+
+awk '{ if ($9 <0.00001) print $0 }' ./PLINK_QC/hardy.hwe>./PLINK_QC/plinkzoomhwe.hwe
+
+plink \
+--bfile ./PLINK_QC/rosmap7 \
+--hwe 1e-6 \
+--make-bed \
+--out ./PLINK_QC/rosmap_hwe_filter_step1
+
+plink \
+--bfile ./PLINK_QC/rosmap_hwe_filter_step1 \
+--hwe 1e-10 \
+--hwe-all \
+--make-bed \
+--out ./PLINK_QC/rosmap8
+
+plink \
+--bfile ./PLINK_QC/rosmap8 \
+--exclude ./PLINK_QC/inversion.txt \
+--range \
+--indep-pairwise 50 5 0.2 \
+--out ./PLINK_QC/indepSNP
+
+plink \
+--bfile ./PLINK_QC/rosmap8 \
+--extract ./PLINK_QC/indepSNP.prune.in \
+--het \
+--out ./PLINK_QC/R_check
+
+sed 's/"// g' ./PLINK_QC/fail-het-qc.txt | awk '{print$1, $2}'> ./PLINK_QC/het_fail_ind.txt
+
+plink \
+--bfile ./PLINK_QC/rosmap8 \
+--remove ./PLINK_QC/het_fail_ind.txt \
+--make-bed \
+--out ./PLINK_QC/rosmap9
+
+plink \
+--bfile ./PLINK_QC/rosmap8 \
+--extract ./PLINK_QC/indepSNP.prune.in \
+--genome \
+--min 0.2 \
+--out ./PLINK_QC/pihat_min0.2
+
+awk '{ if ($8 >0.9) print $0 }' pihat_min0.2.genome>zoom_pihat.genome
+
+plink \
+--bfile ./PLINK_QC/rosmap9 \
+--filter-founders \
+--make-bed \
+--out ./PLINK_QC/rosmap9
+
+plink \
+--bfile ./PLINK_QC/rosmap9 \
+--extract ./PLINK_QC/indepSNP.prune.in \
+--genome \
+--min 0.2 \
+--out ./PLINK_QC/pihat_min0.2_in_founders
+
+plink \
+--bfile ./PLINK_QC/rosmap9 \
+--missing \
+./PLINK_QC/missing_final 
+```
+
+
+## Generating MDS values on Terminal:
+
+```{bash eval=FALSE, include=TRUE}
+module load PLINK/1.9
+
+plink \
+--vcf ALL.2of4intersection.20100804.genotypes.vcf.gz \
+--make-bed \
+--out ./PLINK_MDS/ALL.2of4intersection.20100804.genotypes
+
+plink \
+--bfile ./PLINK_MDS/ALL.2of4intersection.20100804.genotypes \
+--set-missing-var-ids @:#[b37]\$1,\$2 \
+  --make-bed \
+--out ./PLINK_MDS/ALL.2of4intersection.20100804.genotypes_no_missing_IDs
+
+plink \
+--bfile ./PLINK_MDS/ALL.2of4intersection.20100804.genotypes_no_missing_IDs \
+--geno 0.2 \
+--allow-no-sex \
+--make-bed \
+--out ./PLINK_MDS/1kG_MDS
+
+plink \
+--bfile ./PLINK_MDS/1kG_MDS \
+--mind 0.2 \
+--allow-no-sex \
+--make-bed \
+--out ./PLINK_MDS/1kG_MDS2
+
+plink \
+--bfile ./PLINK_MDS/1kG_MDS2 \
+--geno 0.02 \
+--allow-no-sex \
+--make-bed \
+--out ./PLINK_MDS/1kG_MDS3
+
+plink \
+--bfile ./PLINK_MDS/1kG_MDS3 \
+--mind 0.02 \
+--allow-no-sex \
+--make-bed \
+--out ./PLINK_MDS/1kG_MDS4
+
+plink \
+--bfile ./PLINK_MDS/1kG_MDS4 \
+--maf 0.05 \
+--allow-no-sex \
+--make-bed \
+--out ./PLINK_MDS/1kG_MDS5
+
+awk '{print$2}' ./PLINK_QC/rosmap9.bim> ./PLINK_MDS/rosmap_snps.txt
+
+plink \
+--bfile 1kG_MDS5 \
+--extract ./PLINK_MDS/rosmap_snps.txt \
+--make-bed \
+--out ./PLINK_MDS/1kG_MDS6
+
+awk '{print$2}' ./PLINK_MDS/1kG_MDS6.bim > ./PLINK_MDS/1kG_MDS6_SNPs.txt
+
+plink \
+--bfile ./PLINK_QC/rosmap9 \
+--extract ./PLINK_MDS/1kG_MDS6_SNPs.txt \
+--recode \
+--make-bed \
+--out ./PLINK_MDS/rosmap_MDS
+
+awk '{print$2,$4}' ./PLINK_MDS/rosmap_MDS.map > ./PLINK_MDS/buildrosmap.txt
+
+plink \
+--bfile ./PLINK_MDS/1kG_MDS6 \
+--update-map ./PLINK_MDS/buildrosmap.txt \
+--make-bed \
+--out ./PLINK_MDS/1kG_MDS7
+
+awk '{print$2,$5}' ./PLINK_MDS/1kG_MDS7.bim > ./PLINK_MDS/1kg_ref-list.txt
+
+plink \
+--bfile ./PLINK_MDS/rosmap_MDS \
+--reference-allele ./PLINK_MDS/1kg_ref-list.txt \
+--make-bed \
+--out ./PLINK_MDS/rosmap-adj
+
+awk '{print$2,$5,$6}' ./PLINK_MDS/1kG_MDS7.bim > ./PLINK_MDS/1kGMDS7_tmp
+
+awk '{print$2,$5,$6}' ./PLINK_MDS/rosmap-adj.bim > ./PLINK_MDS/rosmap-adj_tmp
+
+sort ./PLINK_MDS/1kGMDS7_tmp ./PLINK_MDS/rosmap-adj_tmp |uniq -u > ./PLINK_MDS
+/all_differences.txt
+
+awk '{print$1}' ./PLINK_MDS/all_differences.txt | sort -u > ./PLINK_MDS/flip_list.txt
+
+plink \
+--bfile ./PLINK_MDS/rosmap-adj \
+--flip ./PLINK_MDS/flip_list.txt \
+--reference-allele ./PLINK_MDS/1kg_ref-list.txt \
+--make-bed \
+--out ./PLINK_MDS/corrected_rosmap
+
+awk '{print$2,$5,$6}' ./PLINK_MDS/corrected_rosmap.bim > ./PLINK_MDS/corrected_rosmap_tmp
+
+sort ./PLINK_MDS/1kGMDS7_tmp ./PLINK_MDS/corrected_rosmap_tmp |uniq -u  > ./PLINK_MDS
+/uncorresponding_SNPs.txt
+
+awk '{print$1}' ./PLINK_MDS/uncorresponding_SNPs.txt | sort -u > ./PLINK_MDS
+/SNPs_for_exlusion.txt
+
+plink \
+--bfile ./PLINK_MDS/corrected_rosmap \
+--exclude ./PLINK_MDS/SNPs_for_exlusion.txt \
+--make-bed \
+--out ./PLINK_MDS/rosmap_MDS2
+
+plink \
+--bfile ./PLINK_MDS/1kG_MDS7 \
+--exclude ./PLINK_MDS/SNPs_for_exlusion.txt \
+--make-bed \
+--out ./PLINK_MDS/1kG_MDS8
+
+plink \
+--bfile ./PLINK_MDS/rosmap_MDS2 \
+--bmerge ./PLINK_MDS/1kG_MDS8.bed ./PLINK_MDS/1kG_MDS8.bim ./PLINK_MDS/1kG_MDS8.fam \
+--allow-no-sex \
+--make-bed \
+--out ./PLINK_MDS/MDS_merge2
+
+plink \
+--bfile ./PLINK_MDS/MDS_merge2 \
+--extract ./PLINK_QC/indepSNP.prune.in \
+--genome \
+--out ./PLINK_MDS/MDS_merge3
+
+plink \
+--bfile ./PLINK_MDS/MDS_merge2 \
+--read-genome ./PLINK_MDS/MDS_merge3.genome \
+--cluster \
+--mds-plot 10 \
+--out ./PLINK_MDS/MDS_merge4
+
+awk '{print$1,$2,"OWN"}' ./PLINK_MDS/rosmap_MDS.fam>./MDS_plotting/racefile_own.txt
+
+cat ./MDS_plotting/race_1kG14.txt ./MDS_plotting/racefile_own.txt | sed -e '1i\FID IID race' 
+> ./MDS_plotting/racefile.txt
+```
+
+
+## Generating MDS plots from the MDS tables:
+
+```{r eval=FALSE, include=TRUE}
+data<- read.table(file="MDS_merge4.mds.txt",header=TRUE)
+race<- read.table(file="racefile.txt",header=TRUE)
+datafile<- merge(data,race,by=c("IID","FID"))
+head(datafile)
+
+#pdf("MDS.pdf",width=7,height=7)
+for (i in 1:nrow(datafile)){
+  if (datafile[i,14]=="EUR") {
+    plot(datafile[i,4],datafile[i,5],type="p",xlim=c(-0.1,0.2),ylim=c(-0.15,0.1),
+         xlab="MDS Component 1",ylab="MDS Component 2",pch=1,cex=0.5,col="green")
+  }
+  par(new=T)
+  if (datafile[i,14]=="ASN") {
+    plot(datafile[i,4],datafile[i,5],type="p",xlim=c(-0.1,0.2),ylim=c(-0.15,0.1),
+         xlab="MDS Component 1",ylab="MDS Component 2",pch=1,cex=0.5,col="red")
+  }
+  par(new=T)
+  if (datafile[i,14]=="AMR") {
+    plot(datafile[i,4],datafile[i,5],type="p",xlim=c(-0.1,0.2),ylim=c(-0.15,0.1),
+         xlab="MDS Component 1",ylab="MDS Component 2",pch=1,cex=0.5,col=470)
+  }
+  par(new=T)
+  if (datafile[i,14]=="AFR") {
+    plot(datafile[i,4],datafile[i,5],type="p",xlim=c(-0.1,0.2),ylim=c(-0.15,0.1),
+         xlab="MDS Component 1",ylab="MDS Component 2",pch=1,cex=0.5,col="blue")
+  }
+  par(new=T)
+  if (datafile[i,14]=="OWN") {
+    plot(datafile[i,4],datafile[i,5],type="p",xlim=c(-0.1,0.2),ylim=c(-0.15,0.1),
+         xlab="MDS Component 1",ylab="MDS Component 2",pch=3,cex=0.7,col="black")
+  }
+  par(new=T)
+}
+
+abline(v=-0.035,lty=3)
+abline(h=0.035,lty=3)
+legend("topright", pch=c(1,1,1,1,3),c("EUR","ASN","AMR","AFR","OWN"),
+       col=c("green","red",470,"blue","black"),bty="o",cex=1)
+
+pdf("MDS1.pdf",width=7,height=7)
+for (i in 1:nrow(datafile)){
+  if (datafile[i,14]=="EUR") {
+    plot(datafile[i,5],datafile[i,6],type="p",xlim=c(-0.1,0.2),ylim=c(-0.15,0.1),
+         xlab="MDS Component 2",ylab="MDS Component 3",pch=1,cex=0.5,col="green")
+  }
+  par(new=T)
+  if (datafile[i,14]=="ASN") {
+    plot(datafile[i,5],datafile[i,6],type="p",xlim=c(-0.1,0.2),ylim=c(-0.15,0.1),
+         xlab="MDS Component 2",ylab="MDS Component 3",pch=1,cex=0.5,col="red")
+  }
+  par(new=T)
+  if (datafile[i,14]=="AMR") {
+    plot(datafile[i,5],datafile[i,6],type="p",xlim=c(-0.1,0.2),ylim=c(-0.15,0.1),
+         xlab="MDS Component 2",ylab="MDS Component 3",pch=1,cex=0.5,col=470)
+  }
+  par(new=T)
+  if (datafile[i,14]=="AFR") {
+    plot(datafile[i,5],datafile[i,6],type="p",xlim=c(-0.1,0.2),ylim=c(-0.15,0.1),
+         xlab="MDS Component 2",ylab="MDS Component 3",pch=1,cex=0.5,col="blue")
+  }
+  par(new=T)
+  if (datafile[i,14]=="OWN") {
+    plot(datafile[i,5],datafile[i,6],type="p",xlim=c(-0.1,0.2),ylim=c(-0.15,0.1),
+         xlab="MDS Component 2",ylab="MDS Component 3",pch=3,cex=0.7,col="black")
+  }
+  par(new=T)
+}
+
+abline(v=-0.035,lty=3)
+abline(h=0.035,lty=3)
+legend("topright", pch=c(1,1,1,1,3),c("EUR","ASN","AMR","AFR","OWN"),
+       col=c("green","red",470,"blue","black"),bty="o",cex=1)
+
+pdf("MDS2.pdf",width=7,height=7)
+for (i in 1:nrow(datafile)){
+  if (datafile[i,14]=="EUR") {
+    plot(datafile[i,5],datafile[i,6],type="p",xlim=c(-0.1,0.2),ylim=c(-0.15,0.1),
+         xlab="MDS Component 2",ylab="MDS Component 3",pch=1,cex=0.5,col="green")
+  }
+  par(new=T)
+  if (datafile[i,14]=="ASN") {
+    plot(datafile[i,5],datafile[i,6],type="p",xlim=c(-0.1,0.2),ylim=c(-0.15,0.1),
+         xlab="MDS Component 2",ylab="MDS Component 3",pch=1,cex=0.5,col="red")
+  }
+  par(new=T)
+  if (datafile[i,14]=="AMR") {
+    plot(datafile[i,5],datafile[i,6],type="p",xlim=c(-0.1,0.2),ylim=c(-0.15,0.1),
+         xlab="MDS Component 2",ylab="MDS Component 3",pch=1,cex=0.5,col=470)
+  }
+  par(new=T)
+  if (datafile[i,14]=="AFR") {
+    plot(datafile[i,5],datafile[i,6],type="p",xlim=c(-0.1,0.2),ylim=c(-0.15,0.1),
+         xlab="MDS Component 2",ylab="MDS Component 3",pch=1,cex=0.5,col="blue")
+  }
+  par(new=T)
+  if (datafile[i,14]=="OWN") {
+    plot(datafile[i,5],datafile[i,6],type="p",xlim=c(-0.1,0.2),ylim=c(-0.15,0.1),
+         xlab="MDS Component 2",ylab="MDS Component 3",pch=3,cex=0.7,col="black")
+  }
+  par(new=T)
+}
+
+abline(v=-0.035,lty=3)
+abline(h=0.035,lty=3)
+legend("topright", pch=c(1,1,1,1,3),c("EUR","ASN","AMR","AFR","OWN"),
+       col=c("green","red",470,"blue","black"),bty="o",cex=1)
+```
+
+
+## Genotye quality control in terminal:
+
+```{bash eval=FALSE, include=TRUE}
+module load PLINK/1.9
+
+plink \
+--bfile /external/rprshnas01/netdata_kcni/dflab/data/rosmap/genotype/TOPmed_imputed
+/vcf/merged/merged_overlap_rs \
+--maf 0.05 \
+--hwe 1e-6 \
+--geno 0.01 \
+--mind 0.01 \
+--write-snplist \
+--make-just-fam \
+--out ./PLINK_PCA/geno_qc
+
+plink \
+--bfile /external/rprshnas01/netdata_kcni/dflab/data/rosmap/genotype/TOPmed_imputed
+/vcf/merged/merged_overlap_rs \
+--extract ./PLINK_PCA/geno_qc.snplist \
+--keep ./PLINK_PCA/geno_qc.fam \
+--het \
+--out ./PLINK_PCA/geno_qc
+```
+
+
+## Selecting genotype data within 3 standard deviation of the population mean:
+```{r eval=FALSE, include=TRUE}
+library(data.table)
+
+# Read in file
+het <- fread("geno_qc.het")
+
+# Get samples with F coefficient within 3 SD of the population mean
+valid <- het[F<=mean(F)+3*sd(F) & F>=mean(F)-3*sd(F)] 
+
+# print FID and IID for valid samples
+fwrite(valid[,c("FID","IID")], 
+       "geno_qc.valid.sample", 
+       sep="\t")
+```
+
+  
+## Generating PCA tables in Terminal:
+
+```{bash eval=FALSE, include=TRUE}
+plink \
+--bfile /external/rprshnas01/netdata_kcni/dflab/data/rosmap/genotype/TOPmed_imputed
+/vcf/merged/merged_overlap_rs \
+--extract ./PLINK_PCA/geno_qc.snplist \
+--keep ./PLINK_PCA/geno_qc.valid.sample \
+--indep-pairwise 50 5 0.2 \
+--out ./PLINK_PCA/geno_qc 
+
+
+plink \
+--bfile /external/rprshnas01/netdata_kcni/dflab/data/rosmap/genotype/TOPmed_imputed
+/vcf/merged/merged_overlap_rs \
+--extract ./PLINK_PCA/geno_qc.prune.in \
+--keep ./PLINK_PCA/geno_qc.valid.sample \
+--make-bed \
+--out ./PLINK_PCA/geno_forPCA
+
+plink \
+--bfile ./PLINK_PCA/geno_forPCA \
+--pca \
+--out ./PLINK_PCA/geno_qc
+```
+
+
+## Generating PCA plots in R:
+
+```{r eval=FALSE, include=TRUE}
+
+#Importing libraries
+
+library(ggplot2)
+library(gridExtra)
+
+pcs <- read.table("geno_qc.eigenvec (3sd).txt")  
+
+
+p <- ggplot(data=pcs,aes(y=V3,x=V4))+
+  geom_point(col=8)+
+  theme_minimal()+
+  labs(y="PCA1",x="PCA2")
+
+p1 <- ggplot(data=pcs,aes(y=V4,x=V5))+
+  geom_point(col=3)+
+  theme_minimal()+
+  labs(y="PCA2",x="PCA3")+
+  xlim(-0.04,0.12)
+
+p2 <- ggplot(data=pcs,aes(y=V5,x=V6))+
+  geom_point(col=4)+
+  theme_minimal()+
+  labs(y="PCA3",x="PCA4")
+
+p3 <- ggplot(data=pcs,aes(y=V6,x=V7))+
+  geom_point(col=5)+
+  theme_minimal()+
+  labs(y="PCA4",x="PCA5")+
+  xlim(-0.10,0.03)
+
+gridExtra::grid.arrange(p, p1, p2, p3, nrow = 2,padding = unit(3, "line"))
+
+
+grid.arrange(p,p1,p2,p3, nrow = 2)
+```
+
+
+## Calculating Polygenic Risk Scores in Terminal:
+```{bash eval=FALSE, include=TRUE}
+
+\\AD
+
+module load PRSice/2.2.0
+
+prsice \
+--A1 Effect_allele \
+--A2 Non_Effect_allele \
+--all-score  \
+--bar-levels 5e-08,1e-07,1e-06,1e-05,0.0001,0.001,0.01,0.05,0.1,1 \
+--base ./team/ak/Summary_stats/IGAP_stage_1combined.txt \
+--beta  \
+--binary-target F \vi
+--bp Position \
+--chr Chromosome \
+--clump-kb 300 \
+--clump-p 0.500000 \
+--clump-r2 0.050000 \
+--fastscore  \
+--model add \
+--no-regress  \
+--out ./team/ak/PRS/AD/PRS_AD_IGAP_stage_1_2013_new_imputed \
+--print-snp  \
+--pvalue Pvalue \
+--se SE \
+--snp MarkerName \
+--stat Beta \
+--target ./data/rosmap/genotype/TOPmed_imputed/vcf/merged/merged_overlap_rs \
+--thread 2
+
+
+\\Glaucoma
+
+module load PRSice/2.2.0
+
+prsice \
+--A1 Effect_allele \
+--A2 Non_Effect_allele \
+--all-score  \
+--bar-levels 5e-08,1e-07,1e-06,1e-05,0.0001,0.001,0.01,0.05,0.1,1 \
+--base ./team/ak/Summary_stats/MTAG_glaucoma_four_traits_summary_statistics.txt \
+--beta  \
+--binary-target F \
+--bp POS \
+--chr CHR\
+--clump-kb 300 \
+--clump-p 0.500000 \
+--clump-r2 0.050000 \
+--fastscore  \
+--model add \
+--no-regress  \
+--out ./team/ak/PRS/Glaucoma/MTAG_glaucoma_four_traits_new_imputed \
+--print-snp  \
+--pvalue P \
+--se SE \
+--snp SNP \
+--stat BETA \
+--target ./data/rosmap/genotype/TOPmed_imputed/vcf/merged/merged_overlap_rs \
+--thread 2
+```
+
+
+## Generating PRS distribution plots in R:
+
+```{r eval=FALSE, include=TRUE}
+# Data cleaning
+
+# read in all.score files
+ad <- read.table("PRS_AD_IGAP_stage_1_2013_new_imputed.all.score.txt",check.names = F)
+gl <- read.table("MTAG_glaucoma_four_traits_new_imputed.all.score.txt",check.names = F)
+
+# read in phenotype
+ROSmaster <- readRDS("ROSmaster.rds")
+
+# change header names for ad and gl
+names(ad) <- c('FID', 'IID', '5e-08', '1e-07', '1e-06', 
+               '1e-05', '1e-04', '0.001', '0.01', '0.05', '0.1', '1')
+ad <- ad[2:2068,]
+
+names(gl) <- c('FID', 'IID', '5e-08', '1e-07', '1e-06', 
+               '1e-05', '1e-04', '0.001', '0.01', '0.05', '0.1', '1')
+gl <- gl[2:2068,]
+
+# add prefixes to PRS score names for clarity before merging
+names(ad)[-c(1,2)] <- paste0("AD_",names(ad)[-c(1,2)])
+names(gl)[-c(1,2)] <- paste0("GL_",names(gl)[-c(1,2)])
+
+
+# Looking at the distribution of each PRS
+
+plot_multi_histogram <- function(df, feature, label_column) {
+  plt <- ggplot(df, aes(x=eval(parse(text=feature)), 
+                        fill=eval(parse(text=label_column)))) +
+    #geom_histogram(alpha=0.7, position="identity", aes(y = ..density..), color="black") +
+    geom_density(alpha=0.7) +
+    geom_vline(aes(xintercept=mean(eval(parse(text=feature)))), 
+               color="black", linetype="dashed", size=1) +
+    labs(fill='P-value at level:', x="", y = "")+
+    theme_bw()+
+    ggtitle("Distribution of PRS for AD")+
+    theme(plot.title = element_text(hjust = 0.5))
+  plt + guides(fill=guide_legend(title=label_column))
+}
+
+a <-data.frame(n=ad$`AD_5e-08`, category=rep('5e-08', dim(ad)[1]))
+b <-data.frame(n=ad$`AD_1e-07`, category=rep('1e-07', dim(ad)[1]))
+c <-data.frame(n=ad$`AD_1e-06`, category=rep('1e-06', dim(ad)[1]))
+d <-data.frame(n=ad$`AD_1e-05`, category=rep('1e-05', dim(ad)[1]))
+e <-data.frame(n=ad$`AD_0.001`, category=rep('0.001', dim(ad)[1]))
+f <-data.frame(n=ad$`AD_0.05`, category=rep('0.05', dim(ad)[1]))
+many_distros <- do.call('rbind', list(a,b,c,d,e))
+names(many_distros)<-c('PRS','Pvalue')
+options(repr.plot.width = 20, repr.plot.height = 8)
+p <- plot_multi_histogram(many_distros, 'PRS', 'Pvalue')
+
+# Distribution of PRS for Glaucoma
+
+plot_multi_histogram2 <- function(df, feature, label_column) {
+  plt <- ggplot(df, aes(x=eval(parse(text=feature)), 
+                        fill=eval(parse(text=label_column)))) +
+    #geom_histogram(alpha=0.7, position="identity", aes(y = ..density..), color="black") +
+    geom_density(alpha=0.7) +
+    geom_vline(aes(xintercept=mean(eval(parse(text=feature)))), 
+               color="black", linetype="dashed", size=1) +
+    labs(fill='P-value at level:', x="", y = "")+
+    theme_bw()+
+    ggtitle("Distribution of PRS for Glaucoma")+
+    theme(plot.title = element_text(hjust = 0.5))
+  plt + guides(fill=guide_legend(title=label_column))
+}
+
+a2 <-data.frame(n=gl$`GL_5e-08`, category=rep('5e-08', dim(gl)[1]))
+b2 <-data.frame(n=gl$`GL_1e-07`, category=rep('1e-07', dim(gl)[1]))
+c2 <-data.frame(n=gl$`GL_1e-06`, category=rep('1e-06', dim(gl)[1]))
+d2 <-data.frame(n=gl$`GL_1e-04`, category=rep('1e-04', dim(gl)[1]))
+e2 <-data.frame(n=gl$`GL_0.001`, category=rep('0.001', dim(gl)[1]))
+f2 <-data.frame(n=gl$`GL_0.05`, category=rep('0.05', dim(gl)[1]))
+many_distros2 <- do.call('rbind', list(a2,b2,c2,d2,e2,f2))
+names(many_distros2)<-c('PRS','Pvalue')
+options(repr.plot.width = 20, repr.plot.height = 8)
+p2 <- plot_multi_histogram2(many_distros2, 'PRS', 'Pvalue')
+
+library(ggpubr)
+
+figure1 <- ggarrange(p, p2,
+                     ncol = 1, nrow = 2)
+figure1
+
+```
+
+## Generating SNP count plots in R:
+
+```{r eval=FALSE, include=TRUE}
+library(ggplot2)
+
+PRS2_SNP <- read.table('PRS_AD_IGAP_stage_1_2013_new_imputed.snp.txt')
+names(PRS2_SNP) <- c('CHR','SNP','BP','P', 'Base')
+PRS2_SNP <- PRS2_SNP[2:134700,]
+PRS2_SNP$P <- as.numeric(as.character(PRS2_SNP$P))
+PRS2_SNP$Pcategory <- NULL
+j<-1
+for(i in PRS2_SNP$P){
+  if(i<=5e-08){
+    PRS2_SNP$Pcategory[j] <- '1'
+  }
+  else if (5e-08<i & i<=1e-07){
+    PRS2_SNP$Pcategory[j] <- '2'
+  }
+  else if (1e-07<i & i<=1e-06){
+    PRS2_SNP$Pcategory[j] <- '3'
+  }
+  else if (1e-06<i & i<=1e-05){
+    PRS2_SNP$Pcategory[j] <- '4'
+  }
+  else if (1e-05<i & i<=1e-04){
+    PRS2_SNP$Pcategory[j] <- '5'
+  }
+  else if (1e-04<i & i<=0.001){
+    PRS2_SNP$Pcategory[j] <- '6'
+  }
+  else if (0.001<i & i<=0.01){
+    PRS2_SNP$Pcategory[j] <- '7'
+  }
+  else if (0.01<i & i<=0.05){
+    PRS2_SNP$Pcategory[j] <- '8'
+  }
+  else if (0.05<i & i<=0.1){
+    PRS2_SNP$Pcategory[j] <- '9'
+  }
+  else if (i>0.1){
+    PRS2_SNP$Pcategory[j] <- '10'
+  }
+  j <- j+1        
+}
+
+table(PRS2_SNP$Pcategory)
+l2=NULL
+for (i in 1:length(table(PRS2_SNP$Pcategory))){
+  l2 <- append(l2,as.numeric(table(PRS2_SNP$Pcategory)[as.character(i)]))
+}
+l2[2]<- l2[1]+l2[2]
+l2[3]<- l2[1]+l2[2]+l2[3]
+l2[4]<- l2[1]+l2[2]+l2[3]+l2[4]
+l2[5]<- l2[1]+l2[2]+l2[3]+l2[4]+l2[5]
+l2[6]<- l2[1]+l2[2]+l2[3]+l2[4]+l2[5]+l2[6]
+l2[7]<- l2[1]+l2[2]+l2[3]+l2[4]+l2[5]+l2[6]+l2[7]
+l2[8]<- l2[1]+l2[2]+l2[3]+l2[4]+l2[5]+l2[6]+l2[7]+l2[8]
+l2[9]<- l2[1]+l2[2]+l2[3]+l2[4]+l2[5]+l2[6]+l2[7]+l2[8]+l2[9]
+l2 <- l2[1:9]
+
+df_ad_snp_count <- data.frame(l2,c('5e-08', '1e-07', '1e-06','1e-05', 
+                                   '1e-04','0.001', '0.01', '0.05', '0.1'))
+names(df_ad_snp_count) <- c('count','p_val')
+library(RColorBrewer) 
+colourCount = length(unique(df_ad_snp_count$count))
+getPalette = colorRampPalette(brewer.pal(9, "Set2"))
+
+p_snp_count_ad <- ggplot(data=df_ad_snp_count, 
+                         aes(x=reorder(p_val, +count),y=count, 
+                             fill = reorder(p_val, -count))) +
+  geom_bar(stat="identity",width = 0.4) + 
+  theme_minimal() +
+  scale_fill_manual(values = getPalette(colourCount)) +
+  geom_text(aes(label=count), hjust=-0.5, color = 'brown', size=3.5) +
+  labs(fill = 'P-val threshold',x="", y="SNP count for AD") +
+  theme(legend.position = "left")+
+  coord_flip(ylim = c(0,260000)) 
+
+p_snp_count_ad
+
+# Number of SNP's for glaucoma
+
+PRS3_SNP <- read.table('MTAG_glaucoma_four_traits_new_imputed.snp.txt')
+names(PRS3_SNP) <- c('CHR','SNP','BP','P', 'Base')
+PRS3_SNP <- PRS3_SNP[2:169797,]
+PRS3_SNP$P <- as.numeric(as.character(PRS3_SNP$P))
+PRS3_SNP$Pcategory <- NULL
+j<-1
+for(i in PRS3_SNP$P){
+  if(i<=5e-08){
+    PRS3_SNP$Pcategory[j] <- '1'
+  }
+  else if (5e-08<i & i<=1e-07){
+    PRS3_SNP$Pcategory[j] <- '2'
+  }
+  else if (1e-07<i & i<=1e-06){
+    PRS3_SNP$Pcategory[j] <- '3'
+  }
+  else if (1e-06<i & i<=1e-05){
+    PRS3_SNP$Pcategory[j] <- '4'
+  }
+  else if (1e-05<i & i<=1e-04){
+    PRS3_SNP$Pcategory[j] <- '5'
+  }
+  else if (1e-04<i & i<=0.001){
+    PRS3_SNP$Pcategory[j] <- '6'
+  }
+  else if (0.001<i & i<=0.01){
+    PRS3_SNP$Pcategory[j] <- '7'
+  }
+  else if (0.01<i & i<=0.05){
+    PRS3_SNP$Pcategory[j] <- '8'
+  }
+  else if (0.05<i & i<=0.1){
+    PRS3_SNP$Pcategory[j] <- '9'
+  }
+  else if (i>0.1){
+    PRS3_SNP$Pcategory[j] <- '10'
+  }
+  j <- j+1        
+}
+
+table(PRS3_SNP$Pcategory)
+l3=NULL
+for (i in 1:length(table(PRS3_SNP$Pcategory))){
+  l3 <- append(l3,as.numeric(table(PRS3_SNP$Pcategory)[as.character(i)]))
+}
+l3[2]<- l3[1]+l3[2]
+l3[3]<- l3[1]+l3[2]+l3[3]
+l3[4]<- l3[1]+l3[2]+l3[3]+l3[4]
+l3[5]<- l3[1]+l3[2]+l3[3]+l3[4]+l3[5]
+l3[6]<- l3[1]+l3[2]+l3[3]+l3[4]+l3[5]+l3[6]
+l3[7]<- l3[1]+l3[2]+l3[3]+l3[4]+l3[5]+l3[6]+l3[7]
+l3[8]<- l3[1]+l3[2]+l3[3]+l3[4]+l3[5]+l3[6]+l3[7]+l3[8]
+l3[9]<- l3[1]+l3[2]+l3[3]+l3[4]+l3[5]+l3[6]+l3[7]+l3[8]+l3[9]
+l3 <- l3[1:9]
+
+df_gl_snp_count <- data.frame(l3,c('5e-08', '1e-07', '1e-06','1e-05', 
+                                   '1e-04','0.001', '0.01', '0.05', '0.1'))
+names(df_gl_snp_count) <- c('count','p_val')
+library(RColorBrewer) 
+colourCount = length(unique(df_gl_snp_count$count))
+getPalette = colorRampPalette(brewer.pal(9, "Set3"))
+
+p_snp_count_gl <- ggplot(data=df_gl_snp_count, 
+                         aes(x=reorder(p_val, +count), 
+                             y=count, fill = reorder(p_val, -count))) +
+  geom_bar(stat="identity",width = 0.4) + 
+  theme_minimal() +
+  scale_fill_manual(values = getPalette(colourCount)) +
+  geom_text(aes(label=count), hjust=-0.5, color = 'brown', size=3.5) +
+  labs(fill = 'P-val threshold',x="", y="SNP count for Glaucoma") +
+  theme(legend.position = "left")+
+  coord_flip(ylim = c(0,475000)) 
+
+p_snp_count_gl
+
+#########################
+# Combining gl and ad SNP count 
+
+library(ggpubr)
+
+figure3 <- ggarrange(p_snp_count_ad,p_snp_count_gl,
+                     ncol = 1, nrow = 2)
+
+figure3
+```
+
+
+## Genereating correlation plot between PRSs of AD and Glaucoma in R:
+
+```{r eval=FALSE, include=TRUE}
+# Data cleaning
+
+# read in all.score files
+ad <- read.table("PRS_AD_IGAP_stage_1_2013_new_imputed.all.score.txt",check.names = F)
+gl <- read.table("MTAG_glaucoma_four_traits_new_imputed.all.score.txt",check.names = F)
+
+# read in phenotype
+ROSmaster <- readRDS("ROSmaster.rds")
+
+# change header names for ad and gl
+names(ad) <- c('FID', 'IID', '5e08', '1e07', '1e06', 
+               '1e05', '1e04', '0.001', '0.01', '0.05', '0.1', '1')
+ad <- ad[2:2068,]
+
+names(gl) <- c('FID', 'IID', '5e08', '1e07', '1e06', 
+               '1e05', '1e04', '0.001', '0.01', '0.05', '0.1', '1')
+gl <- gl[2:2068,]
+
+# add prefixes to PRS score names for clarity before merging
+names(ad)[-c(1,2)] <- paste0("AD_",names(ad)[-c(1,2)])
+names(gl)[-c(1,2)] <- paste0("GL_",names(gl)[-c(1,2)])
+
+# merge PRS data frames
+allprs <- merge(ad,gl,by=c("FID","IID"))
+
+# merge combined PRS and PCA data frame with phenotypes
+alldat <- merge(allprs,ROSmaster,by=c("IID"))
+
+# select the names of the PRS variables
+prsnames <- names(alldat)[3:22]
+
+##########################################################################
+# Loading Packages
+library(corrplot)
+library(Hmisc)
+
+# perform pearson correlation on the PRS variables
+cormat <- rcorr(as.matrix(alldat[,prsnames]))
+
+# plot the correltaion matrix
+corrplot(cormat$r,   # plot the pearson values
+         type = "upper",   # don't show the bottom part of the symmetrical matrix
+         method="color",    # fill the squares with color
+         addCoef.col = "grey",    # write the correlations inside the squares
+         number.cex = 0.7,    # change the size of the square text
+         p.mat = cormat$P,    # mark some squares based on p-values
+         pch.cex = 0.8)      # change the size of the marks for insignificant values
+```
+
+
+## Modelling in hierarchical group-lasso method and best subset selection in R:
+
+```{r eval=FALSE, include=TRUE}
+# Data cleaning
+
+# read in all.score files
+ad <- read.table("PRS_AD_IGAP_stage_1_2013_new_imputed.all.score.txt",check.names = F)
+gl <- read.table("MTAG_glaucoma_four_traits_new_imputed.all.score.txt",check.names = F)
+
+# read in phenotype
+ROSmaster <- readRDS("ROSmaster.rds")
+
+# change header names for ad and gl
+names(ad) <- c('FID', 'IID', '5e08', '1e07', '1e06', 
+               '1e05', '1e04', '0.001', '0.01', '0.05', '0.1', '1')
+ad <- ad[2:2068,]
+
+names(gl) <- c('FID', 'IID', '5e08', '1e07', '1e06', 
+               '1e05', '1e04', '0.001', '0.01', '0.05', '0.1', '1')
+gl <- gl[2:2068,]
+
+# add prefixes to PRS score names for clarity before merging
+names(ad)[-c(1,2)] <- paste0("AD_",names(ad)[-c(1,2)])
+names(gl)[-c(1,2)] <- paste0("GL_",names(gl)[-c(1,2)])
+
+# add pca data
+pca <- read.table("geno_qc.eigenvec (3sd).txt",check.names = F)
+names(pca) <- c("FID","IID","PCA1","PCA2","PCA3","PCA4","PCA5",
+                "PCA6","PCA7","PCA8","PCA9","PCA10","PCA11","PCA12",
+                "PCA13","PCA14","PCA15","PCA16","PCA17","PCA18","PCA19","PCA20")
+
+# merge PRS data frames
+allprs <- merge(ad,gl,by=c("FID","IID"))
+
+# merge combined PRS and PCA data frame with phenotypes
+alldat <- merge(allprs,ROSmaster,by=c("IID"))
+alldat <- merge(alldat,pca,by=c("IID")) # adding pca vars
+
+# select the names of the PRS variables
+prsnames <- names(alldat)[3:22]
+
+##########################################################################
+# Loading Packages
+library(caret) #easy machine learning workflow
+library(ggplot2)
+library(glinternet)
+library(BBmisc) # to normalize the data
+library(stringr)
+library(broom) # for data manipulation
+library(MASS)
+library(leaps) # best subset selection
+library(tidyverse) # for manipulating data
+library(modelr) # for corss validation
+library(broom) # the augment function
+library(interactions) # to look at interaction plots in ols
+library(ggfortify) # for OLS diagnostic
+library(stargazer) # tabels to LATEX
+
+## modellling
+# forming the formula
+
+form <- as.formula("cogn_global_random_slope ~ AD_5e08 + 
+                          AD_1e07 +  AD_1e06 + AD_1e05 + 
+                          AD_1e04 + AD_0.001 + AD_0.01 + 
+                          AD_0.05 + AD_0.1 + AD_1 +
+                          GL_5e08 + GL_1e07 + GL_1e06 + 
+                          GL_1e05 + GL_1e04 + GL_0.001 + 
+                          GL_0.01 + GL_0.05 + GL_0.1 + GL_1+
+                          PCA1 + PCA2 + PCA3 + PCA4 + PCA5 +
+                          age_bl + educ +
+                          msex + heart_ever + stroke_ever + 
+                          claudication_ever + diabetes_sr_rx_ever + 
+                          headinjrloc_ever + hypertension_ever +
+                          cancer_ever + smoking ")
+
+## normalizing the dataset
+# Predictor variables
+x <- model.matrix(form, alldat)[,-1]
+x_normed <- normalize(x[,1:27], method = "standardize", margin = 2L, on.constant = "quiet")
+x_normed <- cbind(x_normed,x[,28:36])
+# Outcome variable
+temp_data <- cbind(alldat$cogn_global_random_slope,alldat$msex,alldat$age_bl,alldat$educ,
+                   alldat$heart_ever,alldat$stroke_ever,alldat$claudication_ever,
+                   alldat$diabetes_sr_rx_ever,alldat$headinjrloc_ever,alldat$hypertension_ever,
+                   alldat$cancer_ever,alldat$smoking)
+temp_data <- na.omit(temp_data)
+temp_data <- as.data.frame(temp_data) 
+y <- temp_data$V1
+y <- na.omit(y)
+y <- normalize(y, method = "standardize", margin = 2L)
+
+# Setting interaction terms and levels of cont and categ vars
+interactions <- matrix(c(1,11,1,12,1,13,1,14,1,15,1,16,1,17,1,18,1,19,1,20,
+                         2,11,2,12,2,13,2,14,2,15,2,16,2,17,2,18,2,19,2,20,
+                         3,11,3,12,3,13,3,14,3,15,3,16,3,17,3,18,3,19,3,20,
+                         4,11,4,12,4,13,4,14,4,15,4,16,4,17,4,18,4,19,4,20,
+                         5,11,5,12,5,13,5,14,5,15,5,16,5,17,5,18,5,19,5,20,
+                         6,11,6,12,6,13,6,14,6,15,6,16,6,17,6,18,6,19,6,20,
+                         7,11,7,12,7,13,7,14,7,15,7,16,7,17,7,18,7,19,7,20,
+                         8,11,8,12,8,13,8,14,8,15,8,16,8,17,8,18,8,19,8,20,
+                         9,11,9,12,9,13,9,14,9,15,9,16,9,17,9,18,9,19,9,20,
+                         10,11,10,12,10,13,10,14,10,15,10,16,10,17,10,18,10,19,10,20), 
+                       ncol=10, byrow=TRUE)
+numLevels <- c(rep(1, 27),2,2,2,2,2,2,2,2,3)
+
+# Cross Validating
+cv <- glinternet.cv(x_normed, y, numLevels=numLevels, nFolds = 10, lambda=NULL, nLambda=100,
+                    lambdaMinRatio=0.001, interactionCandidates=NULL, interactionPairs=interactions,
+                    screenLimit=NULL, family=c("gaussian"), tol=1e-5, maxIter=5000,
+                    verbose=FALSE, numCores=4)
+
+plot(cv)  
+
+# Getting the main and interaction effects left after cross validation
+coef <- coef(cv) ; coef
+# main effect categ: 2,3,7,8 
+# main effect cont: 2, 4, 5, 6, 7, 9, 10, 21, 23, 16
+# interactions: 5:16, 4:16
+
+# merging y and x test:
+alldat_normed <- as.data.frame(cbind(y,x_normed))
+
+#####################################################################
+## Let's use best subset selection, to find the best fit model:
+
+# This function will cross validate our dataset and 
+# selects the top predictors by using best subset selection:
+
+
+form_final <- as.formula("y ~ AD_1e07 +AD_1e05 + AD_1e04 + AD_0.001 + AD_0.01 +
+                           AD_0.1 +  AD_1 + GL_0.001 + 
+                           PCA1 + PCA3 + 
+                           heart_ever + stroke_ever + 
+                           hypertension_ever + cancer_ever +
+                           AD_1e04:GL_0.001 + AD_1e05:GL_0.001")
+
+reg.best=regsubsets(y ~ AD_1e07 +AD_1e05 + AD_1e04 + AD_0.001 + AD_0.01 +
+                      AD_0.1 +  AD_1 + GL_0.001 + 
+                      PCA1 + PCA3 + 
+                      heart_ever + stroke_ever + 
+                      hypertension_ever + cancer_ever +
+                      AD_1e04:GL_0.001 + AD_1e05:GL_0.001,data=alldat_normed ,
+                    nbest = 1, nvmax = NULL, force.in = NULL, 
+                    force.out = NULL, method = "exhaustive" )
+
+plot(reg.best,labels =c("Intercept","AD1e07", "AD1e05", 
+                        "AD1e04", "AD0.001", "AD0.01",
+                        "AD0.1",  "AD1", "GL0.001", 
+                        "PCA1", "PCA3",
+                        "heart_ever","stroke_ever",
+                        "hypertenever", "cancer_ever", 
+                        "AD1e04:GL.001","AD1e05:GL.001"),
+     scale = "Cp", main = "Cp")
+
+# Let's plot it in ggplot
+
+rs.summ <- summary(reg.best)
+
+# Calculating Bias-corrected AIC in our setting
+n = 1908
+k = 2:17
+rs.summ$aic.c <- n * log( rs.summ$rss / n) + 2 * k + 
+  (2 * k * (k + 1) / (n - k - 1))
+
+round(rs.summ$aic.c,2) #bias-corrected
+
+# Building a Tibble containing the necessary information
+
+
+best_mods_1 <- data.frame(
+  k = k,
+  r2 = rs.summ$rsq,
+  adjr2 = rs.summ$adjr2,
+  cp = rs.summ$cp,
+  aic.c = rs.summ$aic.c,
+  bic = rs.summ$bic
+)
+
+best_mods <- cbind(best_mods_1, rs.summ$which)
+
+
+# adjr2
+
+p1 <- ggplot(best_mods, aes(x = k, y = adjr2,
+                            label = round(adjr2,4))) +
+  geom_line() +
+  geom_label() +
+  geom_label(data = subset(best_mods,
+                           adjr2 == max(adjr2)),
+             aes(x = k, y = adjr2, label = round(adjr2,4)),
+             fill = "yellow", col = "blue") +
+  theme_bw() +
+  scale_x_continuous(breaks = k) +
+  labs(x = "Number of predictors (including intercept)",
+       y = "Adjusted R-squared")
+
+p1
+
+# Mallow's Cp
+
+p2 <- ggplot(best_mods, aes(x = k, y = cp,
+                            label = round(cp,3))) +
+  geom_line() +
+  geom_label() +
+  geom_abline(intercept = 0, slope = 1,
+              col = "red") +
+  theme_bw() +
+  scale_x_continuous(breaks = k) +
+  labs(x = "Number of predictors (including intercept)",
+       y = "Mallows' Cp")
+
+p2
+
+# Bias corrected AIC
+
+p3 <- ggplot(best_mods, aes(x = k, y = aic.c,
+                            label = round(aic.c,1))) +
+  geom_line() +
+  geom_label() +
+  geom_label(data = subset(best_mods, aic.c == min(aic.c)),
+             aes(x = k, y = aic.c), fill = "pink", 
+             col = "red") +
+  theme_bw() +
+  scale_x_continuous(breaks = k) +
+  labs(x = "Number of predictors (including intercept)",
+       y = "Bias-Corrected AIC")
+
+p3
+
+# BIC plot
+
+p4 <- ggplot(best_mods, aes(x = k, y = bic,
+                            label = round(bic,2))) +
+  geom_line() +
+  geom_label() +
+  geom_label(data = subset(best_mods, bic == min(bic)),
+             aes(x = k, y = bic),
+             fill = "lightgreen", col = "blue") +
+  theme_bw() +
+  scale_x_continuous(breaks = k) +
+  labs(x = "Number of predictors (including intercept)",
+       y = "BIC")
+
+p4
+
+# all 4 plots together:
+
+gridExtra::grid.arrange(p1, p2, p3, p4, nrow = 2)
+
+
+# models to look at: 13, 11, 10, 7 (subtract by 1)
+best_mods[7-1,7:23]
+best_mods[10-1,7:23]
+best_mods[11-1,7:23]
+best_mods[13-1,7:23]
+#best_mods[24-1,7:23]
+
+final_models <- rbind(best_mods[7-1,7:23],best_mods[10-1,7:23],
+                      best_mods[11-1,7:23],best_mods[13-1,7:23])
+
+# Using ANOVA to compare the nested models:
+
+m.int <- lm(y ~ 1, data = alldat_normed)
+
+m07 <- lm(y~AD_1e05+AD_0.1+AD_1+stroke_ever+hypertension_ever+cancer_ever, 
+          data = alldat_normed)
+
+m07.1 <- lm(y~AD_1e05+AD_0.1+AD_1+stroke_ever+hypertension_ever+cancer_ever+ 
+              GL_0.001, data = alldat_normed)
+
+m10 <- lm(y~AD_1e07+AD_1e04+AD_0.1+AD_1+heart_ever+stroke_ever+ GL_0.001+
+            hypertension_ever+cancer_ever+AD_1e04:GL_0.001, data = alldat_normed)
+
+m11 <- lm(y~AD_1e07+AD_1e04+AD_0.1+AD_1+PCA1+heart_ever+stroke_ever+
+            hypertension_ever+ GL_0.001+
+            cancer_ever+AD_1e04:GL_0.001, data = alldat_normed)
+
+m13 <- lm(y~AD_1e05+AD_1e04+AD_0.01+AD_0.1+AD_1+
+            PCA1+PCA3+heart_ever+stroke_ever+
+            hypertension_ever+cancer_ever+ GL_0.001 +
+            AD_1e04:GL_0.001 + AD_1e05:GL_0.001, data = alldat_normed)
+
+m.full<-lm(y ~ AD_1e07 +AD_1e05 + AD_1e04 + AD_0.001 + AD_0.01 +
+             AD_0.1 +  AD_1 + GL_0.001 + 
+             PCA1 + PCA3 + 
+             heart_ever + stroke_ever + 
+             hypertension_ever + cancer_ever +
+             AD_1e04:GL_0.001 + AD_1e05:GL_0.001,data=alldat_normed)
+
+m.common <- lm(y ~ AD_1e04 + AD_0.01 +
+                 AD_0.1 +  AD_1 + GL_0.001 + 
+                 stroke_ever + 
+                 hypertension_ever + cancer_ever+
+                 AD_1e04:GL_0.001,data=alldat_normed)
+
+anova(m.full,m13,m.common)[1:6] #m13 is better 
+anova(m.full,m11,m.common)[1:6] #m11 is better
+anova(m.full,m10,m.common)[1:6]
+anova(m.full,m.common,m07)[1:6]
+anova(m.full,m10)[1:6]
+anova(m.full,m11,m10)[1:6]
+anova(m.full,m10,m07)[1:6]
+anova(m11,m07)[1:6]
+anova(m13,m11)[1:6]
+anova(m13,m.int)[1:6]
+anova(m11,m.int)[1:6]
+
+rbind(anova(m.full,m13)[1:6],anova(m.full,m11)[1:6])
+anova(m.full,m.common)[1:6]
+anova(m.full,m07)[1:6]
+anova(m.full,m07.1)[1:6]
+
+anova(m.full,m.common)
+
+stargazer(rbind(anova(m.full,m13,m.common)[1:6],
+                anova(m.full,m11,m.common)[1:6],
+                anova(m.full,m10,m.common)[1:6],
+                anova(m.full,m.common,m07)[1:6]),
+          summary = FALSE,rownames = FALSE)
+
+
+# AIC and BIC comparision
+
+AIC(m07,m10,m11,m13,m.common) # m13 have the smallest AIC value
+BIC(m07,m10,m11,m13,m.common) # m07 is the smallest here
+
+stargazer(AIC(m07,m10,m11,m13),summary = FALSE,rownames = FALSE)
+stargazer(BIC(m07,m10,m11,m13),summary = FALSE,rownames = FALSE)
+stargazer(cbind(AIC(m07,m07.1,m10,m11,m13,m.common),
+                BIC(m07,m07.1,m10,m11,m13,m.common))[-3],
+          summary = FALSE,rownames = FALSE)
+
+## Cross-Validation on the candidate models:
+
+
+# m.int
+
+set.seed(80084)
+
+cv_m.int <- alldat_normed %>%
+  crossv_kfold(k = 20) %>%
+  mutate(model = map(train, 
+                     ~lm(y~ 1,
+                         data = .)))
+
+
+cv_m.int_pred <- map2(cv_m.int$model, cv_m.int$test, ~ augment(.x, newdata = .y))
+
+RMSE = NULL
+MAE = NULL
+for(i in 1:20){
+  RMSE <- append(RMSE,sqrt(mean((cv_m.int_pred[[i]]$y - cv_m.int_pred[[i]]$.fitted) ^2)))
+  MAE <- append(MAE,mean(abs(cv_m.int_pred[[i]]$y - cv_m.int_pred[[i]]$.fitted)))
+}
+
+mean(RMSE) #0.9952101
+mean(MAE) #0.742158
+
+# m07
+
+set.seed(80085)
+
+cv_m07 <- alldat_normed %>%
+  crossv_kfold(k = 20) %>%
+  mutate(model = map(train, 
+                     ~lm(y~AD_1e05+AD_0.1+AD_1+stroke_ever+hypertension_ever+cancer_ever,
+                         data = .)))
+
+
+cv_m07_pred <- map2(cv_m07$model, cv_m07$test, ~ augment(.x, newdata = .y))
+
+RMSE = NULL
+MAE = NULL
+for(i in 1:20){
+  RMSE <- append(RMSE,sqrt(mean((cv_m07_pred[[i]]$y - cv_m07_pred[[i]]$.fitted) ^2)))
+  MAE <- append(MAE,mean(abs(cv_m07_pred[[i]]$y - cv_m07_pred[[i]]$.fitted)))
+}
+
+mean(RMSE) #0.8676206
+mean(MAE) #0.6375744
+
+# m07.1
+
+set.seed(80082)
+
+cv_m07.1 <- alldat_normed %>%
+  crossv_kfold(k = 20) %>%
+  mutate(model = map(train, 
+                     ~lm(y~AD_1e05 + AD_0.1+AD_1 + stroke_ever + hypertension_ever 
+                         + cancer_ever + GL_0.001,
+                         data = .)))
+
+cv_m07.1_pred <- map2(cv_m07.1$model, cv_m07.1$test, ~ augment(.x, newdata = .y))
+
+RMSE = NULL
+MAE = NULL
+for(i in 1:20){
+  RMSE <- append(RMSE,sqrt(mean((cv_m07.1_pred[[i]]$y - cv_m07.1_pred[[i]]$.fitted) ^2)))
+  MAE <- append(MAE,mean(abs(cv_m07.1_pred[[i]]$y - cv_m07.1_pred[[i]]$.fitted)))
+}
+
+mean(RMSE) #0.8645397
+mean(MAE) #0.6375272
+
+# m.common
+
+set.seed(80093)
+
+cv_m.common <- alldat_normed %>%
+  crossv_kfold(k = 20) %>%
+  mutate(model = map(train, 
+                     ~lm(y ~ AD_1e04 + AD_0.01 +
+                           AD_0.1 +  AD_1 + GL_0.001 + 
+                           stroke_ever + 
+                           hypertension_ever + cancer_ever+
+                           AD_1e04:GL_0.001,
+                         data = .)))
+
+cv_m.common_pred <- map2(cv_m.common$model, cv_m.common$test, ~ augment(.x, newdata = .y))
+
+RMSE = NULL
+MAE = NULL
+for(i in 1:20){
+  RMSE <- append(RMSE,sqrt(mean((cv_m.common_pred[[i]]$y - cv_m.common_pred[[i]]$.fitted) ^2)))
+  MAE <- append(MAE,mean(abs(cv_m.common_pred[[i]]$y - cv_m.common_pred[[i]]$.fitted)))
+}
+
+mean(RMSE) #0.869684
+mean(MAE) #0.6395798
+
+# m10 # The best perfomring model so far
+
+set.seed(80086)
+
+cv_m10 <- alldat_normed %>%
+  crossv_kfold(k = 20) %>%
+  mutate(model = map(train, 
+                     ~lm(y~AD_1e07 + AD_1e04 + AD_0.1 + AD_1 + heart_ever 
+                         + stroke_ever + GL_0.001+
+                           hypertension_ever+cancer_ever+AD_1e04:GL_0.001,
+                         data = .)))
+
+
+cv_m10_pred <- map2(cv_m10$model, cv_m10$test, ~ augment(.x, newdata = .y))
+
+RMSE = NULL
+MAE = NULL
+for(i in 1:20){
+  RMSE <- append(RMSE,sqrt(mean((cv_m10_pred[[i]]$y - cv_m10_pred[[i]]$.fitted) ^2)))
+  MAE <- append(MAE,mean(abs(cv_m10_pred[[i]]$y - cv_m10_pred[[i]]$.fitted)))
+}
+
+mean(RMSE) # 0.8688182
+mean(MAE) # 0.6368587 #the smallest
+
+# m11 # Also the best performing model
+
+set.seed(80087)
+
+cv_m11 <- alldat_normed %>%
+  crossv_kfold(k = 20) %>%
+  mutate(model = map(train, 
+                     ~lm(y~AD_1e07+AD_1e04+AD_0.1+AD_1+PCA1+heart_ever+stroke_ever+GL_0.001+
+                           hypertension_ever+
+                           cancer_ever+AD_1e04:GL_0.001,
+                         data = .)))
+
+
+cv_m11_pred <- map2(cv_m11$model, cv_m11$test, ~ augment(.x, newdata = .y))
+
+RMSE = NULL
+MAE = NULL
+for(i in 1:20){
+  RMSE <- append(RMSE,sqrt(mean((cv_m11_pred[[i]]$y - cv_m11_pred[[i]]$.fitted) ^2)))
+  MAE <- append(MAE,mean(abs(cv_m11_pred[[i]]$y - cv_m11_pred[[i]]$.fitted)))
+}
+
+mean(RMSE) # 0.865895 #the smallest
+mean(MAE) # 0.6379933
+
+# m13
+
+set.seed(80088)
+
+cv_m13 <- alldat_normed %>%
+  crossv_kfold(k = 20) %>%
+  mutate(model = map(train, 
+                     ~lm(y~AD_1e05+AD_1e04+AD_0.01+AD_0.1+AD_1+PCA1+PCA3+heart_ever+stroke_ever+
+                           hypertension_ever+cancer_ever+GL_0.001+
+                           AD_1e05:GL_0.001+AD_1e07:GL_5e08,
+                         data = .)))
+
+cv_m13_pred <- map2(cv_m13$model, cv_m13$test, ~ augment(.x, newdata = .y))
+
+RMSE = NULL
+MAE = NULL
+for(i in 1:20){
+  RMSE <- append(RMSE,sqrt(mean((cv_m13_pred[[i]]$y - cv_m13_pred[[i]]$.fitted) ^2)))
+  MAE <- append(MAE,mean(abs(cv_m13_pred[[i]]$y - cv_m13_pred[[i]]$.fitted)))
+}
+
+mean(RMSE) # 0.8687117
+mean(MAE) # 0.6385583
+
+# m.full
+
+set.seed(80089)
+
+cv_m.full <- alldat_normed %>%
+  crossv_kfold(k = 20) %>%
+  mutate(model = map(train, 
+                     ~lm(y ~ AD_1e07 +AD_1e05 + AD_1e04 + AD_0.001 + AD_0.01 +
+                           AD_0.1 +  AD_1 + GL_0.001 + 
+                           PCA1 + PCA3 + 
+                           heart_ever + stroke_ever + 
+                           hypertension_ever + cancer_ever +
+                           AD_1e04:GL_0.001 + AD_1e05:GL_0.001,
+                         data = .)))
+
+cv_m.full_pred <- map2(cv_m.full$model, cv_m.full$test, ~ augment(.x, newdata = .y))
+
+RMSE = NULL
+MAE = NULL
+for(i in 1:20){
+  RMSE <- append(RMSE,sqrt(mean((cv_m.full_pred[[i]]$y - cv_m.full_pred[[i]]$.fitted) ^2)))
+  MAE <- append(MAE,mean(abs(cv_m.full_pred[[i]]$y - cv_m.full_pred[[i]]$.fitted)))
+}
+
+mean(RMSE) # 0.8680821
+mean(MAE) # 0.6393354
+
+# Creating a table of all the results:
+
+models <- c('int','m07','m07.1','m10','m11','m13','m.full','m.common')
+RMSE <- c(0.9952101,0.8676206,0.8645397,0.8688182,0.865895,0.8687117,0.8680821,0.8687187)
+MAE <- c(0.742158,0.6375744,0.6375272,0.6368587,0.6379933,0.6385583,0.6393354,0.639182)
+pred_data <- as.data.frame(cbind(models,RMSE,MAE))
+
+stargazer(pred_data,summary = FALSE,rownames = FALSE)
+
+summary(m07.1)
+summary(m10)
+
+# Model diagnostics:
+
+model.diag.metrics <- augment(m.common)
+ggplot(model.diag.metrics, aes(y, AD_1e04)) +
+  geom_point() +
+  stat_smooth(method = lm, se = FALSE) +
+  geom_segment(aes(xend = AD_1e04, yend = .fitted), color = "red", size = 0.3)
+
+
+par(mfrow = c(2, 2))
+plot(m.common)
+
+autoplot(m.common)
+
+# Looking at the interaction term:
+
+interact_plot(m.common, modx = `GL_0.001`, pred = `AD_1e04`,
+              x.label='PRS for AD',
+              y.label='Cognitive Decline',
+              legend.main = 'PRS for Glaucoma',
+              main.title = 'Interaction between PRS for AD and glaucoma 
+              at different levels of cognitive decline')
+
+# Let's look at our final selected model without its main effects:
+
+m.common1 <- lm(y ~ AD_1e04 + AD_0.01 +
+                  AD_0.1 +  AD_1 + 
+                  stroke_ever + 
+                  hypertension_ever + cancer_ever+
+                  AD_1e04:GL_0.001,data=alldat_normed)
+
+m.common2 <- lm(y ~ AD_0.01 +
+                  AD_0.1 +  AD_1 + 
+                  stroke_ever + 
+                  hypertension_ever + cancer_ever+
+                  AD_1e04:GL_0.001,data=alldat_normed)
+
+anova(m.common,m.common2)
+
+summary(m.common2)
+stargazer(summary(m.common2)[[4]],summary = FALSE,rownames = FALSE)
+stargazer(anova(m.common,m.common2)[1:6],summary = FALSE,rownames = FALSE)
+```
+
+
